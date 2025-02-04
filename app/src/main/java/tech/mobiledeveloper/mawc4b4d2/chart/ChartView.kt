@@ -7,13 +7,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 
 sealed class ChartType {
     data object Pie : ChartType()
@@ -31,197 +31,217 @@ fun ChartView(
     modifier: Modifier = Modifier,
     items: List<ChartItem>,
     chartType: ChartType,
-    colors: List<Color> = listOf(Color(0xFFBB86FC), Color(0xFF3700B3)),
-    lineColor: Color = Color(0xFFBB86FC),
-    backgroundColor: Color = Color.White,
+    canvasColors: CanvasColors = ChartDefaults.canvasColors(),
+    axisColors: AxisColors = ChartDefaults.axisColors(),
+    axisSizes: AxisSizes = ChartDefaults.axisSizes(),
+    paddings: ChartPaddings = ChartDefaults.paddings()
 ) {
-    Canvas(modifier = modifier.background(backgroundColor)) {
-        if (items.isEmpty() || colors.isEmpty()) return@Canvas
-
-        when (chartType) {
-            is ChartType.Pie -> drawPieChart(items, colors)
-            is ChartType.Bar -> drawBarChart(items, colors)
-            is ChartType.Line -> drawGradientLineChart(items, colors, lineColor)
-        }
-    }
-}
-
-private fun DrawScope.drawPieChart(items: List<ChartItem>, colors: List<Color>) {
-    val totalValue = items.sumOf { it.valueY.toDouble() }.toFloat()
-    var startAngle = 0f
-    val arcSize = Size(size.width, size.height)
-
-    items.forEachIndexed { index, item ->
-        val color = colors.getOrElse(index) { colors.last() } // Защита от выхода за границы списка цветов
-        val sweepAngle = if (totalValue == 0f) 0f else (item.valueY / totalValue) * 360f
-        drawArc(
-            color = color,
-            startAngle = startAngle,
-            sweepAngle = sweepAngle,
-            useCenter = true,
-            topLeft = Offset.Zero,
-            size = arcSize
-        )
-        startAngle += sweepAngle
-    }
-}
-
-fun DrawScope.drawBarChart(items: List<ChartItem>, colors: List<Color>) {
-    val maxValue = items.maxOf { it.valueY }
-    val barWidth = size.width / (items.size * 2)
-
-    items.forEachIndexed { index, item ->
-        val color = colors.getOrElse(index) { colors.last() }
-        val barHeight = if (maxValue == 0f) 0f else (item.valueY / maxValue) * size.height
-        val left = index * (barWidth + barWidth)
-        val top = size.height - barHeight
-        drawRect(
-            color = color,
-            topLeft = Offset(left, top),
-            size = Size(barWidth, barHeight)
+    when (chartType) {
+        is ChartType.Pie -> drawPieChart(items, canvasColors)
+        is ChartType.Bar -> drawBarChart(items, canvasColors)
+        is ChartType.Line -> drawGradientLineChart(
+            modifier,
+            items,
+            canvasColors,
+            axisColors,
+            axisSizes,
+            paddings
         )
     }
 }
 
-private fun DrawScope.drawGradientLineChart(
-    axisXPadding: Float = 40f,
-    axisYPadding: Float = 40f,
+@Composable
+private fun drawPieChart(
     items: List<ChartItem>,
-    gradientColors: List<Color>,
-    lineColor: Color
+    canvasColors: CanvasColors = ChartDefaults.canvasColors(),
 ) {
+    Canvas(modifier = Modifier.background(canvasColors.backgroundColor)) {
+        val totalValue = items.sumOf { it.valueY.toDouble() }.toFloat()
+        var startAngle = 0f
+        val arcSize = Size(size.width, size.height)
 
-    // Максимальное и минимальное значение в данных по X
-    val maxX = items.maxOf { it.valueX }
-    val minX = items.minOf { it.valueX }
-
-    // Максимальное и минимальное значение в данных по Y
-    val maxY = items.maxOf { it.valueY }
-    val minY = items.minOf { it.valueY }
-
-    // Доступные размеры для графика
-    val availableWidth = size.width - axisXPadding
-    val availableHeight = size.height - axisYPadding
-
-    // Позиции точек графика
-    val points = items.map { item ->
-        val xRatio = (item.valueX - minX) / (maxX - minX) // Нормализация X
-        val x = axisXPadding + (xRatio * availableWidth)
-
-        val yRatio = (item.valueY - minY) / (maxY - minY) // Нормализация Y
-        val y = size.height - axisYPadding - (yRatio * availableHeight) // Инвертируем Y
-
-        Offset(x, y)
-    }
-
-    // --- Построение сглаженного пути для линии ---
-    val linePath = Path().apply {
-        smoothCurveThrough(points) // Используем улучшенное сглаживание
-    }
-
-    // --- Построение заливки графика ---
-    val fillPath = Path().apply {
-        moveTo(points.first().x, size.height - paddingBottom) // Начало от нижней левой точки
-        addPath(linePath) // Добавляем сглаженную линию
-        lineTo(points.last().x, size.height - paddingBottom) // Завершаем нижней правой точкой
-        close()
-    }
-
-    // Рисуем градиентную заливку (сверху тёмный, снизу прозрачный)
-    drawPath(
-        path = fillPath,
-        brush = Brush.verticalGradient(
-            colors = listOf(
-                gradientColors.first().copy(alpha = 0.8f), // Тёмный цвет сверху
-                gradientColors.last().copy(alpha = 0.0f)   // Прозрачный цвет снизу
+        items.forEachIndexed { index, item ->
+            val color = canvasColors.gradientColors.first()
+            val sweepAngle = if (totalValue == 0f) 0f else (item.valueY / totalValue) * 360f
+            drawArc(
+                color = color,
+                startAngle = startAngle,
+                sweepAngle = sweepAngle,
+                useCenter = true,
+                topLeft = Offset.Zero,
+                size = arcSize
             )
-        ),
-        style = Fill
-    )
-
-    // Рисуем сглаженную линию поверх заливки
-    drawPath(
-        path = linePath,
-        color = lineColor,
-        style = Stroke(width = 4f)
-    )
-
-    // Рисуем точки графика
-    points.forEach { point ->
-        drawCircle(
-            color = lineColor,
-            radius = 8f,
-            center = point
-        )
-    }
-
-    // --- Рисуем оси координат ---
-    drawLine(
-        color = Color.Gray,
-        start = Offset(paddingLeft, 0f),
-        end = Offset(paddingLeft, size.height - paddingBottom),
-        strokeWidth = 3f
-    )
-    drawLine(
-        color = Color.Gray,
-        start = Offset(paddingLeft, size.height - paddingBottom),
-        end = Offset(size.width, size.height - paddingBottom),
-        strokeWidth = 3f
-    )
-
-    // --- Подписи осей координат ---
-    val textPaint = android.graphics.Paint().apply {
-        color = android.graphics.Color.BLACK // Подходит для светлого фона
-        textSize = 30f
-    }
-
-    drawIntoCanvas { canvas ->
-        // Подписи значений по оси Y
-        val stepY = availableHeight / 5
-        repeat(6) { i ->
-            val value = minY + ((maxY - minY) / 5) * i
-            val y = size.height - paddingBottom - (i * stepY)
-            canvas.nativeCanvas.drawText(
-                String.format("%.5f", value),
-                10f,
-                y,
-                textPaint
-            )
+            startAngle += sweepAngle
         }
+    }
+}
 
-        // Подписи значений по оси X
-        items.forEach { item ->
-            val xRatio = (item.valueX - minX) / (maxX - minX)
-            val x = paddingLeft + (xRatio * availableWidth)
-            canvas.nativeCanvas.drawText(
-                String.format("%.5f", item.valueX),
-                x - 20,
-                size.height - 10,
-                textPaint
+@Composable
+private fun drawBarChart(items: List<ChartItem>, canvasColors: CanvasColors) {
+    Canvas(modifier = Modifier.background(canvasColors.backgroundColor)) {
+        val maxValue = items.maxOf { it.valueY }
+        val barWidth = size.width / (items.size * 2)
+
+        items.forEachIndexed { index, item ->
+            val color = canvasColors.gradientColors.first()
+            val barHeight = if (maxValue == 0f) 0f else (item.valueY / maxValue) * size.height
+            val left = index * (barWidth + barWidth)
+            val top = size.height - barHeight
+            drawRect(
+                color = color,
+                topLeft = Offset(left, top),
+                size = Size(barWidth, barHeight)
             )
         }
     }
 }
 
-fun Path.smoothCurveThrough(points: List<Offset>) {
-    if (points.size < 2) return
+@Composable
+private fun drawGradientLineChart(
+    modifier: Modifier = Modifier,
+    items: List<ChartItem>,
+    canvasColors: CanvasColors,
+    axisColors: AxisColors,
+    axisSizes: AxisSizes,
+    paddings: ChartPaddings
+) {
+    Canvas(
+        modifier = modifier
+            .background(canvasColors.backgroundColor)
+    ) {
+        // Минимальные и максимальные значения
+        val maxX = items.maxOf { it.valueX }
+        val minX = items.minOf { it.valueX }
+        val maxY = items.maxOf { it.valueY }
+        val minY = items.minOf { it.valueY }
 
-    moveTo(points.first().x, points.first().y)
+        // Доступные размеры графика
+        val graphWidth = size.width - paddings.paddingStart.value
+        val graphHeight = size.height - paddings.paddingBottom.value - paddings.paddingTop.value
 
-    for (i in 1 until points.size) {
-        val prev = points[i - 1]
-        val curr = points[i]
+        // Масштабирование данных
+        val points = items.map { item ->
+            val xRatio = (item.valueX - minX) / (maxX - minX)
+            val x = paddings.paddingStart.value + xRatio * graphWidth
 
-        // Средняя точка между предыдущей и текущей
-        val midPointX = (prev.x + curr.x) / 2
-        val controlPoint1 = Offset(midPointX, prev.y)
-        val controlPoint2 = Offset(midPointX, curr.y)
+            val yRatio = (item.valueY - minY) / (maxY - minY)
+            val y = size.height - paddings.paddingBottom.value - yRatio * graphHeight
 
-        // Добавляем сглаженную кривую между точками
-        cubicTo(
-            controlPoint1.x, controlPoint1.y,
-            controlPoint2.x, controlPoint2.y,
-            curr.x, curr.y
+            Offset(x, y)
+        }
+
+        // --- Построение сглаженного пути ---
+        val linePath = Path().apply {
+            moveTo(points.first().x, points.first().y)
+            for (i in 1 until points.size) {
+                val prevPoint = points[i - 1]
+                val currentPoint = points[i]
+                val controlPoint1X = (prevPoint.x + currentPoint.x) / 2
+                val controlPoint1Y = prevPoint.y
+                val controlPoint2X = (prevPoint.x + currentPoint.x) / 2
+                val controlPoint2Y = currentPoint.y
+
+                cubicTo(
+                    controlPoint1X,
+                    controlPoint1Y,
+                    controlPoint2X,
+                    controlPoint2Y,
+                    currentPoint.x,
+                    currentPoint.y
+                )
+            }
+        }
+
+        // --- Построение заливки ---
+        val gradientPath = Path().apply {
+            addPath(linePath)
+            lineTo(points.last().x, size.height - paddings.paddingBottom.value) // Замыкаем до нижней границы
+            lineTo(points.first().x, size.height - paddings.paddingBottom.value)
+            close()
+        }
+
+        // Градиент
+        drawPath(
+            path = gradientPath,
+            brush = Brush.verticalGradient(
+                colors = listOf(
+                    canvasColors.gradientColors.first().copy(alpha = 0.8f), // Тёмный сверху
+                    canvasColors.gradientColors.last().copy(alpha = 0.0f)   // Прозрачный снизу
+                ),
+                startY = paddings.paddingTop.value,
+                endY = size.height - paddings.paddingBottom.value
+            ),
+            style = Fill
         )
+
+        // Рисуем линию графика
+        drawPath(
+            path = linePath,
+            color = canvasColors.lineColor,
+            style = Stroke(width = 6f, cap = StrokeCap.Round)
+        )
+
+        // Рисуем точки графика
+        points.forEach { point ->
+            drawCircle(
+                color = canvasColors.lineColor,
+                radius = 8f,
+                center = point
+            )
+        }
+
+        // --- Оси координат ---
+        drawLine(
+            color = axisColors.axisXColor,
+            start = Offset(paddings.paddingStart.value, paddings.paddingTop.value),
+            end = Offset(paddings.paddingStart.value, size.height - paddings.paddingBottom.value),
+            strokeWidth = 2f
+        )
+        drawLine(
+            color = axisColors.axisYColor,
+            start = Offset(paddings.paddingStart.value, size.height - paddings.paddingBottom.value),
+            end = Offset(size.width, size.height - paddings.paddingBottom.value),
+            strokeWidth = 2f
+        )
+
+        // --- Метки осей ---
+        val textXPaint = android.graphics.Paint().apply {
+            color = axisColors.labelXColor.toArgb()
+            textSize = axisSizes.labelXSize
+            textAlign = android.graphics.Paint.Align.CENTER
+        }
+
+        val textYPaint = android.graphics.Paint().apply {
+            color = axisColors.labelYColor.toArgb()
+            textSize = axisSizes.labelYSize
+            textAlign = android.graphics.Paint.Align.CENTER
+        }
+
+        drawIntoCanvas { canvas ->
+            // Метки оси Y
+            val stepY = graphHeight / axisSizes.axisYSteps
+            for (i in 0..axisSizes.axisYSteps) {
+                val valueY = minY + (maxY - minY) / axisSizes.axisYSteps * i
+                val y = size.height - paddings.paddingBottom.value - i * stepY
+                canvas.nativeCanvas.drawText(
+                    String.format("%.2f", valueY),
+                    paddings.paddingStart.value,
+                    y,
+                    textYPaint
+                )
+            }
+
+            val stepX = graphHeight / axisSizes.axisXSteps
+            for (i in 0..axisSizes.axisXSteps) {
+                val valueX = minX + (maxX - minX) / axisSizes.axisXSteps * i
+                val x = size.width - paddings.paddingStart.value - i * stepX
+                canvas.nativeCanvas.drawText(
+                    String.format("%.2f", valueX),
+                    x,
+                    size.height,
+                    textXPaint
+                )
+            }
+        }
     }
 }

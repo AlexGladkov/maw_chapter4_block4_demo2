@@ -26,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import tech.mobiledeveloper.mawc4b4d2.chart.ChartDefaults
 import tech.mobiledeveloper.mawc4b4d2.chart.ChartItem
 import tech.mobiledeveloper.mawc4b4d2.chart.ChartType
 import tech.mobiledeveloper.mawc4b4d2.chart.ChartView
@@ -75,7 +76,8 @@ class MainActivity : ComponentActivity() {
                         ChartView(
                             chartType = currentChartType,
                             items = items,
-                            colors = chartColors,
+                            canvasColors = ChartDefaults.canvasColors(),
+                            axisColors = ChartDefaults.axisColors(),
                             modifier = Modifier
                                 .align(Alignment.Center)
                                 .fillMaxWidth()
