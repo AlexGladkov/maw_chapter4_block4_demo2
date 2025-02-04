@@ -39,14 +39,16 @@ class MainActivity : ComponentActivity() {
             MAWC4B4D2Theme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     val items = listOf(
-                        ChartItem(label = "Apple", value = 40f),
-                        ChartItem(label = "Banana", value = 20f),
-                        ChartItem(label = "Orange", value = 30f),
-                        ChartItem(label = "Kiwi", value = 10f)
+                        ChartItem(0.00010f, 0.00010f),
+                        ChartItem(0.00020f, 0.00070f),
+                        ChartItem(0.00050f, 0.00050f),
+                        ChartItem(0.00070f, 0.00100f),
+                        ChartItem(0.00100f, 0.00020f),
+                        ChartItem(0.00110f, 0.00110f)
                     )
 
                     val chartColors = listOf(
-                        Color.Red, Color.Yellow, Color(0xFFFFA500), Color.Green
+                        Color(0xFFBB86FC), Color(0xFF3700B3)
                     )
 
                     var currentChartType: ChartType by remember { mutableStateOf(ChartType.Pie) }
